@@ -1,0 +1,155 @@
+{
+  "dashboard": {
+    "title": "AI Code Metrics",
+    "tags": ["ai", "code-metrics", "frontend"],
+    "timezone": "browser",
+    "refresh": "1h",
+    "time": {
+      "from": "now-90d",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Contribution % (AI vs Human)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+        "fieldConfig": {
+          "defaults": {
+            "custom": {
+              "stacking": { "mode": "percent" },
+              "fillOpacity": 80,
+              "lineWidth": 1,
+              "drawStyle": "line"
+            },
+            "unit": "percentunit"
+          }
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT date AS time, tool, SUM(lines_added) AS lines_added FROM daily_contributions WHERE $__timeFilter(date) GROUP BY date, tool ORDER BY date",
+            "format": "time_series",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      },
+      {
+        "id": 2,
+        "title": "Agent DAU by Tool",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+        "fieldConfig": {
+          "defaults": {
+            "custom": { "fillOpacity": 10, "lineWidth": 2 }
+          }
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT date AS time, tool, COUNT(DISTINCT author) AS dau FROM daily_active_users WHERE $__timeFilter(date) AND tool != 'human' GROUP BY date, tool ORDER BY date",
+            "format": "time_series",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      },
+      {
+        "id": 3,
+        "title": "Agent WAU by Tool",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+        "fieldConfig": {
+          "defaults": {
+            "custom": { "fillOpacity": 10, "lineWidth": 2 }
+          }
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT d.date AS time, dau.tool, COUNT(DISTINCT dau.author) AS wau FROM generate_series((SELECT MIN(date) FROM daily_active_users), CURRENT_DATE, '1 day'::interval) AS d(date) JOIN daily_active_users dau ON dau.date BETWEEN d.date - INTERVAL '6 days' AND d.date WHERE $__timeFilter(d.date) AND dau.tool != 'human' GROUP BY d.date, dau.tool ORDER BY d.date",
+            "format": "time_series",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      },
+      {
+        "id": 4,
+        "title": "Agent MAU by Tool",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+        "fieldConfig": {
+          "defaults": {
+            "custom": { "fillOpacity": 10, "lineWidth": 2 }
+          }
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT d.date AS time, dau.tool, COUNT(DISTINCT dau.author) AS mau FROM generate_series((SELECT MIN(date) FROM daily_active_users), CURRENT_DATE, '1 day'::interval) AS d(date) JOIN daily_active_users dau ON dau.date BETWEEN d.date - INTERVAL '29 days' AND d.date WHERE $__timeFilter(d.date) AND dau.tool != 'human' GROUP BY d.date, dau.tool ORDER BY d.date",
+            "format": "time_series",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      },
+      {
+        "id": 5,
+        "title": "AI Code Half-life (Human vs AI)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+        "fieldConfig": {
+          "defaults": {
+            "custom": { "fillOpacity": 10, "lineWidth": 2 },
+            "unit": "percent"
+          }
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT cohort_date AS time, CASE WHEN origin IN ('claude', 'windsurf', 'ai', 'cursor') THEN 'AI' ELSE 'Human' END AS origin_group, AVG(survival_pct) AS avg_survival FROM code_halflife WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM code_halflife) GROUP BY cohort_date, origin_group ORDER BY cohort_date",
+            "format": "time_series",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      },
+      {
+        "id": 6,
+        "title": "AI Code Half-life (by Agent)",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+        "fieldConfig": {
+          "defaults": {
+            "custom": { "fillOpacity": 10, "lineWidth": 2 },
+            "unit": "percent"
+          }
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT cohort_date AS time, origin, AVG(survival_pct) AS avg_survival FROM code_halflife WHERE snapshot_date = (SELECT MAX(snapshot_date) FROM code_halflife) AND origin IN ('claude', 'windsurf', 'cursor') GROUP BY cohort_date, origin ORDER BY cohort_date",
+            "format": "time_series",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "DS_POSTGRES",
+          "type": "datasource",
+          "query": "postgres",
+          "current": {}
+        },
+        {
+          "name": "repo",
+          "type": "query",
+          "query": "SELECT DISTINCT repo FROM daily_contributions ORDER BY repo",
+          "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" },
+          "multi": true,
+          "includeAll": true,
+          "current": { "text": "All", "value": "$__all" }
+        }
+      ]
+    }
+  }
+}
