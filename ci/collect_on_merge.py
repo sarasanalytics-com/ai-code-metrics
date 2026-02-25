@@ -8,6 +8,7 @@ after merge (branch protection prevents force-push).
 
 import json
 import os
+import re
 import subprocess
 import sys
 from collections import defaultdict
@@ -35,15 +36,17 @@ def classify_commit(message: str) -> str:
     """
     msg_lower = message.lower()
 
-    # Co-Authored-By: Claude (added automatically by Claude Code)
-    if "co-authored-by:" in msg_lower:
-        if "claude" in msg_lower or "anthropic" in msg_lower:
+    # Parse Co-Authored-By trailers individually to avoid false positives
+    # (e.g., "noreply.github.com" in human co-author emails)
+    co_authors = re.findall(r'co-authored-by:\s*(.+)', msg_lower)
+    for co_author in co_authors:
+        if "claude" in co_author or "anthropic" in co_author:
             return "claude"
-        if "windsurf" in msg_lower or "codeium" in msg_lower:
+        if "windsurf" in co_author or "codeium" in co_author:
             return "windsurf"
-        if "cursor" in msg_lower:
+        if "cursor" in co_author:
             return "cursor"
-        if "copilot" in msg_lower or "github" in msg_lower:
+        if "copilot" in co_author:
             return "copilot"
 
     # Commit message patterns
@@ -176,6 +179,68 @@ def build_summary(repo: str, branch: str, commits: list[MergedCommit]) -> dict:
     return summary
 
 
+def write_job_summary(summary: dict):
+    """Write a markdown summary to the GitHub Actions job summary."""
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY", "")
+    if not summary_path:
+        return
+
+    total = summary["total_commits"]
+    breakdown = summary["breakdown"]
+
+    # Calculate AI vs Human totals
+    ai_lines = sum(s["lines_added"] for t, s in breakdown.items() if t != "human")
+    human_lines = breakdown.get("human", {}).get("lines_added", 0)
+    total_lines = ai_lines + human_lines
+    ai_pct = round((ai_lines / total_lines) * 100, 1) if total_lines > 0 else 0
+
+    lines = []
+    lines.append("## AI Code Metrics")
+    lines.append("")
+    lines.append(f"**{summary['repo']}** / `{summary['branch']}` — {total} commit{'s' if total != 1 else ''}")
+    lines.append("")
+
+    # Overall AI percentage bar
+    bar_filled = round(ai_pct / 5)
+    bar_empty = 20 - bar_filled
+    bar = "█" * bar_filled + "░" * bar_empty
+    lines.append(f"**AI Contribution:** `{bar}` {ai_pct}%")
+    lines.append("")
+
+    # Breakdown table
+    lines.append("| Source | Commits | Lines Added | Lines Removed | Authors |")
+    lines.append("|--------|---------|-------------|---------------|---------|")
+    for tool, stats in sorted(breakdown.items()):
+        icon = {"claude": "🤖", "windsurf": "🏄", "copilot": "🧑‍✈️", "cursor": "🖱️", "human": "👤"}.get(tool, "❓")
+        lines.append(
+            f"| {icon} {tool.capitalize()} "
+            f"| {stats['commits']} "
+            f"| +{stats['lines_added']} "
+            f"| -{stats['lines_removed']} "
+            f"| {stats['unique_authors']} |"
+        )
+    lines.append("")
+
+    # Commit details
+    lines.append("<details>")
+    lines.append("<summary>Commit details</summary>")
+    lines.append("")
+    lines.append("| SHA | Author | Tool | +/- |")
+    lines.append("|-----|--------|------|-----|")
+    for c in summary["commits"]:
+        lines.append(
+            f"| `{c['sha'][:8]}` "
+            f"| {c['author']} "
+            f"| {c['tool']} "
+            f"| +{c['lines_added']}/−{c['lines_removed']} |"
+        )
+    lines.append("")
+    lines.append("</details>")
+
+    with open(summary_path, "a") as f:
+        f.write("\n".join(lines) + "\n")
+
+
 def main():
     # Read from GitHub Actions environment
     repo = os.environ.get("GITHUB_REPOSITORY", "unknown")
@@ -219,7 +284,7 @@ def main():
         json.dump(summary, f, indent=2)
     print(f"Output written to {output_file}")
 
-    # Also set GitHub Actions output
+    # Set GitHub Actions output
     github_output = os.environ.get("GITHUB_OUTPUT", "")
     if github_output:
         with open(github_output, "a") as f:
@@ -229,6 +294,9 @@ def main():
             )
             f.write(f"ai_commits={ai_commits}\n")
             f.write(f"human_commits={summary['breakdown'].get('human', {}).get('commits', 0)}\n")
+
+    # Write GitHub Actions job summary
+    write_job_summary(summary)
 
 
 if __name__ == "__main__":

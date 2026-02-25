@@ -29,8 +29,10 @@ jobs:
       - name: Download collector script
         run: |
           curl -sfL \
+            -H "Authorization: token ${{ secrets.GH_ACCESS_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3.raw" \
             -o collect_on_merge.py \
-            "https://raw.githubusercontent.com/${{ github.repository_owner }}/ai-code-metrics/main/ci/collect_on_merge.py"
+            "https://api.github.com/repos/${{ github.repository_owner }}/ai-code-metrics/contents/ci/collect_on_merge.py?ref=dev"
 
       - name: Collect metrics
         id: metrics
