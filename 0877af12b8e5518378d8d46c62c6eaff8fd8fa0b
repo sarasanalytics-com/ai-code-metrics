@@ -1,0 +1,23 @@
+ci/ai-metrics.yml
+  d8b7bcb63c5a1e5d 32
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.1.5",
+  "base_commit_sha": "0877af12b8e5518378d8d46c62c6eaff8fd8fa0b",
+  "prompts": {
+    "d8b7bcb63c5a1e5d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "30a07812-41f6-4ad8-946d-8780a4d6cb8b",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Venkateshwaran Selvaraj <venkateshwaran.s@sarasanalytics.com>",
+      "messages": [],
+      "total_additions": 1,
+      "total_deletions": 1,
+      "accepted_lines": 1,
+      "overriden_lines": 0
+    }
+  }
+}
