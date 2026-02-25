@@ -1,9 +1,11 @@
 """CI-level commit attribution collector.
 
 Runs in GitHub Actions on merge to protected branches (dev/qa/prod).
-Classifies commits by parsing commit messages — no git-ai dependency needed.
-This is tamper-resistant because developers cannot modify commit messages
-after merge (branch protection prevents force-push).
+
+Attribution sources (in priority order):
+  1. git-ai notes  — line-level attribution from agent self-reporting
+  2. Co-Authored-By trailers — tamper-resistant (baked into commit SHA)
+  3. Commit message patterns — heuristic fallback
 """
 
 import json
@@ -28,6 +30,22 @@ class MergedCommit:
     tool: str = "human"
 
 
+def get_gitai_stats(base_sha: str, head_sha: str) -> dict | None:
+    """Try git-ai stats for line-level attribution. Returns None if unavailable."""
+    try:
+        result = subprocess.run(
+            ["git-ai", "stats", "--json", f"{base_sha}..{head_sha}"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if result.returncode == 0:
+            return json.loads(result.stdout)
+    except (FileNotFoundError, json.JSONDecodeError, subprocess.TimeoutExpired):
+        pass
+    return None
+
+
 def classify_commit(message: str) -> str:
     """Classify a commit based on its message. Priority order:
 
@@ -42,7 +60,7 @@ def classify_commit(message: str) -> str:
     for co_author in co_authors:
         if "claude" in co_author or "anthropic" in co_author:
             return "claude"
-        if "windsurf" in co_author or "codeium" in co_author:
+        if "windsurf" in co_author or "codeium" in co_author or "cascade" in co_author:
             return "windsurf"
         if "cursor" in co_author:
             return "cursor"
@@ -266,12 +284,47 @@ def main():
 
     print(f"Collecting metrics for {repo_name} ({base_sha[:8]}..{head_sha[:8]}) on {branch}")
 
+    # Try git-ai first for line-level attribution
+    gitai_stats = get_gitai_stats(base_sha, head_sha)
+    if gitai_stats:
+        print("Using git-ai for attribution (line-level)")
+    else:
+        print("git-ai not available, falling back to commit message parsing")
+
     commits = get_merge_commits(base_sha, head_sha)
     print(f"Found {len(commits)} commits")
 
     if not commits:
         print("No commits to process")
         return
+
+    # If git-ai provided data, enrich commits that were classified as "human"
+    # with git-ai's tool_model_breakdown (catches tools like Windsurf that
+    # don't add Co-Authored-By trailers).
+    if gitai_stats and gitai_stats.get("ai_additions", 0) > 0:
+        breakdown = gitai_stats.get("tool_model_breakdown", {})
+        # Extract unique tool names from keys like "cursor:claude-4.5-opus"
+        ai_tools = set()
+        for key in breakdown:
+            tool = key.split(":")[0] if ":" in key else key
+            # Normalize tool names to match our classification
+            tool_map = {
+                "claude_code": "claude", "claude": "claude",
+                "windsurf": "windsurf", "cascade": "windsurf",
+                "cursor": "cursor",
+                "github_copilot": "copilot", "copilot": "copilot",
+            }
+            mapped = tool_map.get(tool, tool)
+            if mapped != "human":
+                ai_tools.add(mapped)
+
+        if ai_tools:
+            # Use the primary AI tool detected by git-ai
+            primary_tool = sorted(ai_tools)[0]
+            for c in commits:
+                if c.tool == "human":
+                    c.tool = primary_tool
+            print(f"  git-ai detected AI tools: {', '.join(sorted(ai_tools))}")
 
     summary = build_summary(repo_name, branch, commits)
 
