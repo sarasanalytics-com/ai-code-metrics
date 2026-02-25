@@ -28,8 +28,7 @@ jobs:
 
       - name: Download collector script
         run: |
-          curl -sL \
-            -H "Authorization: token ${{ secrets.METRICS_PAT }}" \
+          curl -sfL \
             -o collect_on_merge.py \
             "https://raw.githubusercontent.com/${{ github.repository_owner }}/ai-code-metrics/main/ci/collect_on_merge.py"
 
