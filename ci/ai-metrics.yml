@@ -1,0 +1,83 @@
+# GitHub Actions workflow for AI Code Metrics collection.
+#
+# Copy this file to each tracked repo at: .github/workflows/ai-metrics.yml
+#
+# Runs on merge to dev only (code is counted once when it enters,
+# not re-counted on qa/prod promotions). Classifies using
+# Co-Authored-By trailers (tamper-resistant — baked into commit SHA).
+
+name: AI Code Metrics
+
+on:
+  push:
+    branches: [dev]
+
+jobs:
+  collect-metrics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for commit range
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download collector script
+        run: |
+          curl -sL \
+            -H "Authorization: token ${{ secrets.METRICS_PAT }}" \
+            -o collect_on_merge.py \
+            "https://raw.githubusercontent.com/${{ github.repository_owner }}/ai-code-metrics/main/ci/collect_on_merge.py"
+
+      - name: Collect metrics
+        id: metrics
+        env:
+          BASE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+          OUTPUT_FILE: metrics_output.json
+        run: python collect_on_merge.py
+
+      - name: Upload metrics artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-metrics-${{ github.sha }}
+          path: metrics_output.json
+          retention-days: 90
+
+      # Optional: Post metrics to your Postgres DB directly.
+      # Uncomment and set METRICS_DB_URL secret to enable.
+      #
+      # - name: Write to database
+      #   env:
+      #     METRICS_DB_URL: ${{ secrets.METRICS_DB_URL }}
+      #   run: |
+      #     pip install psycopg2-binary
+      #     python -c "
+      #     import json, os, psycopg2
+      #     conn = psycopg2.connect(os.environ['METRICS_DB_URL'])
+      #     with open('metrics_output.json') as f:
+      #         data = json.load(f)
+      #     cur = conn.cursor()
+      #     for c in data['commits']:
+      #         cur.execute('''
+      #             INSERT INTO daily_contributions (date, repo, tool, lines_added, lines_removed, commits, unique_authors)
+      #             VALUES (%s, %s, %s, %s, %s, 1, 1)
+      #             ON CONFLICT (date, repo, tool)
+      #             DO UPDATE SET
+      #                 lines_added = daily_contributions.lines_added + EXCLUDED.lines_added,
+      #                 lines_removed = daily_contributions.lines_removed + EXCLUDED.lines_removed,
+      #                 commits = daily_contributions.commits + 1
+      #         ''', (c['date'], data['repo'], c['tool'], c['lines_added'], c['lines_removed']))
+      #         cur.execute('''
+      #             INSERT INTO daily_active_users (date, repo, tool, author, commits)
+      #             VALUES (%s, %s, %s, %s, 1)
+      #             ON CONFLICT (date, repo, tool, author)
+      #             DO UPDATE SET commits = daily_active_users.commits + 1
+      #         ''', (c['date'], data['repo'], c['tool'], c['author']))
+      #     conn.commit()
+      #     conn.close()
+      #     "

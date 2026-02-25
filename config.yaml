@@ -4,6 +4,14 @@
 repos:
   - name: iq-webapp
     path: /Users/venkat/Work/iq-webapp
+  - name: webapp
+    path: /Users/venkat/Work/webapp
+  - name: global-accounts-webapp
+    path: /Users/venkat/Work/global-accounts-webapp
+  - name: insights-webapp
+    path: /Users/venkat/Work/insights-webapp
+  - name: saras-design-system
+    path: /Users/venkat/Work/saras-design-system
   # Add more repos here:
   # - name: repo-name
   #   path: /path/to/repo
