@@ -11,7 +11,7 @@
 #
 # Prerequisites:
 #   - git
-#   - npm (for installing git-ai)
+#   - curl
 # =============================================================
 set -euo pipefail
 
@@ -29,30 +29,62 @@ info()  { echo -e "${GREEN}[OK]${NC} $1"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
+# --- OS Detection ---
+detect_platform() {
+    case "$(uname -s)" in
+        Darwin)  echo "macOS" ;;
+        Linux)
+            if grep -qiE '(microsoft|wsl)' /proc/version 2>/dev/null; then
+                echo "WSL"
+            else
+                echo "Linux"
+            fi
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            echo "Windows-GitBash"
+            ;;
+        *)       echo "Unknown" ;;
+    esac
+}
+
+PLATFORM=$(detect_platform)
+
 echo ""
 echo "========================================="
 echo "  AI Code Metrics - Developer Setup"
 echo "========================================="
+echo "  Platform detected: $PLATFORM"
+echo "========================================="
 echo ""
+
+if [ "$PLATFORM" = "Windows-GitBash" ]; then
+    error "This bash script is not supported on Windows outside of WSL."
+    echo ""
+    echo "Please use the PowerShell setup script instead:"
+    echo "  .\\setup\\dev_setup.ps1"
+    exit 1
+fi
 
 # --- Step 1: Check / Install git-ai ---
 if command -v git-ai &> /dev/null; then
     info "git-ai is already installed ($(git-ai --version 2>/dev/null || echo 'version unknown'))"
 else
     echo "git-ai is not installed. Attempting to install..."
-    if command -v npm &> /dev/null; then
-        npm install -g @lgtm-ai/git-ai
+    if command -v curl &> /dev/null; then
+        curl -sSL https://usegitai.com/install.sh | bash
+        # Reload PATH so git-ai is available in this session
+        export PATH="$HOME/.local/bin:$HOME/.git-ai/bin:$PATH"
         if command -v git-ai &> /dev/null; then
             info "git-ai installed successfully"
         else
             error "git-ai installation failed. Please install manually:"
-            echo "  npm install -g @lgtm-ai/git-ai"
+            echo "  curl -sSL https://usegitai.com/install.sh | bash"
             echo "  See: https://github.com/lgtm-ai/git-ai"
             exit 1
         fi
     else
-        error "npm not found. Please install git-ai manually:"
-        echo "  npm install -g @lgtm-ai/git-ai"
+        error "curl not found. Please install git-ai manually:"
+        echo "  curl -sSL https://usegitai.com/install.sh | bash"
         echo "  See: https://github.com/lgtm-ai/git-ai"
         exit 1
     fi
