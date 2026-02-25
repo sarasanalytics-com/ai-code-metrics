@@ -64,3 +64,32 @@ detection:
     # Example: if your team configures AI tools to use specific emails
     # claude:
     #   - "claude-bot@yourcompany.com"
+
+# GitHub API settings (for PR token efficiency metrics)
+github:
+  org: sarasanalytics-com
+  token_env: SARAS_UI_TEAM_ACCESS_TOKEN  # read from env var, not stored in config
+
+# Sentry settings (for incident correlation)
+sentry:
+  org: sarasanalytics
+  token_env: SENTRY_AUTH_TOKEN  # read from env var
+  projects:
+    - slug: iq-webapp
+      repo: iq-webapp
+    # Add more projects:
+    # - slug: webapp
+    #   repo: webapp
+
+# AI spend estimation
+spend:
+  estimation:
+    claude:
+      tokens_per_line: 50
+      input_output_ratio: 3  # 3 input tokens per 1 output token
+      input_price_per_m: 3.00   # $/M tokens (Sonnet)
+      output_price_per_m: 15.00
+    windsurf:
+      monthly_per_seat: 15.00  # flat rate, divide by active days
+    # When org admin API becomes available, switch to 'api' source:
+    # anthropic_admin_key_env: ANTHROPIC_ADMIN_KEY

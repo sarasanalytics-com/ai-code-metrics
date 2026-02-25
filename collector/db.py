@@ -80,3 +80,78 @@ def upsert_code_halflife(conn, rows):
     with conn.cursor() as cur:
         psycopg2.extras.execute_values(cur, query, rows)
     conn.commit()
+
+
+def upsert_pr_metrics(conn, rows):
+    """Upsert PR metrics rows.
+
+    Each row: (repo, pr_number, author, tool, lines_added_pr, lines_added_merged,
+               lines_removed_pr, commits_count, created_at, merged_at, review_time_hours)
+    """
+    if not rows:
+        return
+    query = """
+        INSERT INTO pr_metrics (repo, pr_number, author, tool, lines_added_pr, lines_added_merged,
+                                lines_removed_pr, commits_count, created_at, merged_at, review_time_hours)
+        VALUES %s
+        ON CONFLICT (repo, pr_number)
+        DO UPDATE SET
+            author = EXCLUDED.author,
+            tool = EXCLUDED.tool,
+            lines_added_pr = EXCLUDED.lines_added_pr,
+            lines_added_merged = EXCLUDED.lines_added_merged,
+            lines_removed_pr = EXCLUDED.lines_removed_pr,
+            commits_count = EXCLUDED.commits_count,
+            created_at = EXCLUDED.created_at,
+            merged_at = EXCLUDED.merged_at,
+            review_time_hours = EXCLUDED.review_time_hours
+    """
+    with conn.cursor() as cur:
+        psycopg2.extras.execute_values(cur, query, rows)
+    conn.commit()
+
+
+def upsert_incident_commits(conn, rows):
+    """Upsert incident commit rows.
+
+    Each row: (repo, sentry_issue_id, sentry_issue_title, release_version,
+               commit_sha, commit_tool, first_seen, events_count)
+    """
+    if not rows:
+        return
+    query = """
+        INSERT INTO incident_commits (repo, sentry_issue_id, sentry_issue_title, release_version,
+                                      commit_sha, commit_tool, first_seen, events_count)
+        VALUES %s
+        ON CONFLICT (repo, sentry_issue_id, commit_sha)
+        DO UPDATE SET
+            sentry_issue_title = EXCLUDED.sentry_issue_title,
+            release_version = EXCLUDED.release_version,
+            commit_tool = EXCLUDED.commit_tool,
+            first_seen = EXCLUDED.first_seen,
+            events_count = EXCLUDED.events_count
+    """
+    with conn.cursor() as cur:
+        psycopg2.extras.execute_values(cur, query, rows)
+    conn.commit()
+
+
+def upsert_ai_spend(conn, rows):
+    """Upsert AI spend rows.
+
+    Each row: (date, repo, tool, spend_usd, tokens_input, tokens_output, source)
+    """
+    if not rows:
+        return
+    query = """
+        INSERT INTO ai_spend (date, repo, tool, spend_usd, tokens_input, tokens_output, source)
+        VALUES %s
+        ON CONFLICT (date, repo, tool, source)
+        DO UPDATE SET
+            spend_usd = EXCLUDED.spend_usd,
+            tokens_input = EXCLUDED.tokens_input,
+            tokens_output = EXCLUDED.tokens_output
+    """
+    with conn.cursor() as cur:
+        psycopg2.extras.execute_values(cur, query, rows)
+    conn.commit()

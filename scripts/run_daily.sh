@@ -15,7 +15,18 @@ LOG_FILE="$LOG_DIR/daily_$TIMESTAMP.log"
 echo "Starting daily collection at $(date)" | tee "$LOG_FILE"
 
 cd "$PROJECT_DIR"
+
+echo "--- Metrics aggregator ---" | tee -a "$LOG_FILE"
 python -m collector.metrics_aggregator 2>&1 | tee -a "$LOG_FILE"
+
+echo "--- PR collector ---" | tee -a "$LOG_FILE"
+python -m collector.pr_collector 2>&1 | tee -a "$LOG_FILE"
+
+echo "--- Sentry collector ---" | tee -a "$LOG_FILE"
+python -m collector.sentry_collector 2>&1 | tee -a "$LOG_FILE"
+
+echo "--- Spend estimator ---" | tee -a "$LOG_FILE"
+python -m collector.spend_estimator 2>&1 | tee -a "$LOG_FILE"
 
 echo "Daily collection finished at $(date)" | tee -a "$LOG_FILE"
 

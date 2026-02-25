@@ -130,6 +130,187 @@
           }
         ],
         "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      },
+      {
+        "id": 7,
+        "title": "Developer AI Adoption Leaderboard",
+        "type": "table",
+        "gridPos": { "h": 10, "w": 12, "x": 0, "y": 24 },
+        "fieldConfig": {
+          "defaults": {},
+          "overrides": [
+            { "matcher": { "id": "byName", "options": "commits" }, "properties": [{ "id": "custom.align", "value": "center" }] }
+          ]
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT dau.author, dau.tool, SUM(dau.commits) AS commits, SUM(dc.lines_added) AS lines_added FROM daily_active_users dau JOIN daily_contributions dc ON dc.date = dau.date AND dc.repo = dau.repo AND dc.tool = dau.tool WHERE $__timeFilter(dau.date) AND dau.tool != 'human' GROUP BY dau.author, dau.tool ORDER BY commits DESC",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      },
+      {
+        "id": 8,
+        "title": "AI % by Developer",
+        "type": "barchart",
+        "gridPos": { "h": 10, "w": 12, "x": 12, "y": 24 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "custom": { "fillOpacity": 80 }
+          }
+        },
+        "options": {
+          "orientation": "horizontal",
+          "stacking": "none"
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT author, SUM(CASE WHEN tool != 'human' THEN lines_added ELSE 0 END)::float / NULLIF(SUM(lines_added), 0) AS ai_pct FROM (SELECT dau.author, dau.tool, COALESCE(dc.lines_added, 0) AS lines_added FROM daily_active_users dau LEFT JOIN daily_contributions dc ON dc.date = dau.date AND dc.repo = dau.repo AND dc.tool = dau.tool WHERE $__timeFilter(dau.date)) sub GROUP BY author ORDER BY ai_pct DESC",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      },
+      {
+        "id": 9,
+        "title": "Developer Activity Heatmap",
+        "type": "heatmap",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 34 },
+        "fieldConfig": {
+          "defaults": {}
+        },
+        "options": {
+          "calculate": false,
+          "color": { "scheme": "Oranges" }
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT date AS time, author, SUM(commits) AS commits FROM daily_active_users WHERE $__timeFilter(date) GROUP BY date, author ORDER BY date",
+            "format": "time_series",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      },
+      {
+        "id": 10,
+        "title": "Token Efficiency (Lines Surviving Review)",
+        "type": "barchart",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 42 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percentunit",
+            "custom": { "fillOpacity": 80 }
+          }
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT tool, AVG(lines_added_merged)::float / NULLIF(AVG(lines_added_pr), 0) AS efficiency FROM pr_metrics WHERE $__timeFilter(merged_at) GROUP BY tool ORDER BY tool",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      },
+      {
+        "id": 11,
+        "title": "PR Review Time by Tool (hours)",
+        "type": "barchart",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 42 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "h",
+            "custom": { "fillOpacity": 80 }
+          }
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT tool, AVG(review_time_hours) AS avg_review_hours FROM pr_metrics WHERE $__timeFilter(merged_at) GROUP BY tool ORDER BY tool",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      },
+      {
+        "id": 12,
+        "title": "Incident Rate: AI vs Human",
+        "type": "barchart",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 50 },
+        "fieldConfig": {
+          "defaults": {
+            "custom": { "fillOpacity": 80 }
+          }
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT CASE WHEN commit_tool IN ('claude', 'windsurf', 'cursor', 'ai') THEN 'AI' ELSE 'Human' END AS origin, COUNT(DISTINCT sentry_issue_id) AS incidents FROM incident_commits WHERE $__timeFilter(first_seen) GROUP BY origin ORDER BY origin",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      },
+      {
+        "id": 13,
+        "title": "Incidents by AI Tool",
+        "type": "piechart",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 50 },
+        "fieldConfig": {
+          "defaults": {}
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT commit_tool AS tool, COUNT(DISTINCT sentry_issue_id) AS incidents FROM incident_commits WHERE $__timeFilter(first_seen) GROUP BY commit_tool ORDER BY incidents DESC",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      },
+      {
+        "id": 14,
+        "title": "Estimated AI Spend",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 58 },
+        "fieldConfig": {
+          "defaults": {
+            "custom": { "fillOpacity": 30, "lineWidth": 2, "stacking": { "mode": "normal" } },
+            "unit": "currencyUSD"
+          }
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT date AS time, tool, SUM(spend_usd) AS spend FROM ai_spend WHERE $__timeFilter(date) GROUP BY date, tool ORDER BY date",
+            "format": "time_series",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
+      },
+      {
+        "id": 15,
+        "title": "Cost per Line of Code",
+        "type": "barchart",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 58 },
+        "fieldConfig": {
+          "defaults": {
+            "unit": "currencyUSD",
+            "custom": { "fillOpacity": 80 }
+          }
+        },
+        "targets": [
+          {
+            "rawSql": "SELECT s.tool, SUM(s.spend_usd) / NULLIF(SUM(dc.lines_added), 0) AS cost_per_line FROM ai_spend s JOIN daily_contributions dc ON dc.date = s.date AND dc.tool = s.tool AND (dc.repo = s.repo OR s.repo IS NULL) WHERE $__timeFilter(s.date) GROUP BY s.tool ORDER BY s.tool",
+            "format": "table",
+            "refId": "A"
+          }
+        ],
+        "datasource": { "type": "postgres", "uid": "${DS_POSTGRES}" }
       }
     ],
     "templating": {
