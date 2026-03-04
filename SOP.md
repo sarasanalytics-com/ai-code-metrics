@@ -1,7 +1,7 @@
 # Standard Operating Procedure: AI Code Metrics — Organization-Wide Deployment
 
-**Version:** 1.1
-**Last Updated:** 2026-03-03
+**Version:** 1.2
+**Last Updated:** 2026-03-04
 **Audience:** Engineering Managers, DevOps, Platform Teams, Individual Developers
 
 ---
@@ -167,78 +167,81 @@ Add this to your team's onboarding checklist:
 ## 5. GitHub-Level Setup
 
 **Owner:** Repo Owner / Tech Lead (per repository)
-**Time:** 10 minutes per repo
+**Time:** 5 minutes per repo
 
-### 5.1 Add the Workflow File
+### 5.1 Add the Reusable Workflow Call
 
-For **each repository** you want to track:
+This project provides a **reusable workflow** at `.github/workflows/collect-metrics.yml`. Instead of copying a standalone workflow file into each repo, you add a single job to the repo's existing pipeline (e.g., `main.yml`).
 
-```bash
-cd /path/to/your-repo
-mkdir -p .github/workflows
-cp /path/to/ai-code-metrics/ci/ai-metrics.yml .github/workflows/ai-metrics.yml
-```
-
-Or download directly (the `ai-code-metrics` repo is public):
-
-```bash
-curl -sfL -o .github/workflows/ai-metrics.yml \
-  "https://raw.githubusercontent.com/sarasanalytics-com/ai-code-metrics/dev/ci/ai-metrics.yml"
-```
-
-### 5.2 Configure the Trigger Branch
-
-Open `.github/workflows/ai-metrics.yml` and adjust the trigger branch to match your integration branch:
+Open the repo's `.github/workflows/main.yml` and add the `collect-metrics` job:
 
 ```yaml
-on:
-  push:
-    branches: [dev]    # Change to 'main', 'develop', etc. as needed
+jobs:
+  # ... your existing jobs (e.g., Daton, build, deploy) ...
+
+  collect-metrics:
+    if: github.ref == 'refs/heads/dev'    # Change to your integration branch
+    uses: sarasanalytics-com/ai-code-metrics/.github/workflows/collect-metrics.yml@dev
+    with:
+      base_sha: ${{ github.event.before }}
+      head_sha: ${{ github.sha }}
+```
+
+**That's it.** No separate workflow file needed. No GitHub secrets required (the `ai-code-metrics` repo is public).
+
+### 5.2 How It Works
+
+- The `collect-metrics` job calls the reusable workflow hosted in the `ai-code-metrics` repo.
+- The reusable workflow checks out the repo, installs git-ai, downloads the collector script, classifies commits, and uploads the metrics as an artifact.
+- It runs as part of your existing pipeline — **one workflow entry** in the Actions tab, not two.
+
+### 5.3 Configure the Trigger Branch
+
+The `if:` condition controls which branch triggers metrics collection. Adjust it to match your integration branch:
+
+```yaml
+  collect-metrics:
+    if: github.ref == 'refs/heads/dev'       # or 'refs/heads/main', etc.
 ```
 
 **Rationale:** Code should be counted once — when it merges into the integration branch. Do not trigger on promotion branches (staging, production) to avoid double-counting.
 
-### 5.3 Update the Collector Download URL
-
-Since the `ai-code-metrics` repo is public, the workflow downloads the collector script directly without authentication. Verify the download step points to the correct org and branch:
-
-```yaml
-- name: Download collector script
-  run: |
-    curl -sfL \
-      -H "Accept: application/vnd.github.v3.raw" \
-      -o collect_on_merge.py \
-      "https://api.github.com/repos/sarasanalytics-com/ai-code-metrics/contents/ci/collect_on_merge.py?ref=dev"
-```
-
-No GitHub secrets are required for this step.
-
-### 5.4 Optional: Direct Database Writes
-
-If you want merge metrics written directly to PostgreSQL (Phase 2), set this secret in the repo:
-
-| Secret | Value | Purpose |
-|--------|-------|---------|
-| `METRICS_DB_URL` | `postgresql://metrics:pass@host:5432/ai_code_metrics` | Write merge metrics directly to PostgreSQL |
-
-Then uncomment the "Write to database" step in the workflow file.
-
-### 5.5 Commit and Push
+### 5.4 Commit and Push
 
 ```bash
-git add .github/workflows/ai-metrics.yml
-git commit -m "Add AI Code Metrics collection workflow"
+git add .github/workflows/main.yml
+git commit -m "Add AI Code Metrics collection to pipeline"
 git push origin main
 ```
 
-### 5.6 Verify
+### 5.5 Verify
 
 1. Create a branch, make some commits, merge to your trigger branch (e.g., `dev`).
 2. Go to the repo's **Actions** tab on GitHub.
-3. Confirm the "AI Code Metrics" workflow ran successfully.
+3. Confirm the pipeline ran with the `collect-metrics` job visible.
 4. Check the workflow run for:
    - A job summary with the AI contribution breakdown.
    - An uploaded artifact named `ai-metrics-<sha>`.
+
+### 5.6 Adding Custom Logic Per Repo
+
+Since the reusable workflow is a job in your `main.yml`, you can add repo-specific logic around it:
+
+```yaml
+  collect-metrics:
+    if: github.ref == 'refs/heads/dev'
+    needs: [build]                           # Wait for build to pass first
+    uses: sarasanalytics-com/ai-code-metrics/.github/workflows/collect-metrics.yml@dev
+    with:
+      base_sha: ${{ github.event.before }}
+      head_sha: ${{ github.sha }}
+
+  notify-metrics:                            # Custom post-metrics job
+    needs: [collect-metrics]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Metrics collected successfully"
+```
 
 ---
 
@@ -339,10 +342,10 @@ Use this checklist when rolling out to a new team or repo.
 
 **Per repo:**
 
-- [ ] `.github/workflows/ai-metrics.yml` is committed and pushed
-- [ ] Trigger branch matches the repo's integration branch
-- [ ] Download URL in workflow points to the public `ai-code-metrics` repo
-- [ ] A test merge triggers the workflow and produces an artifact
+- [ ] `collect-metrics` job added to the repo's `main.yml` (calls the reusable workflow)
+- [ ] `if:` condition matches the repo's integration branch (e.g., `refs/heads/dev`)
+- [ ] A test merge triggers the pipeline and the `collect-metrics` job runs
+- [ ] An artifact named `ai-metrics-<sha>` is uploaded
 - [ ] Job summary shows correct AI vs Human breakdown
 
 ### Phase 2 — Infrastructure & Dashboards *(WIP)*
@@ -634,14 +637,15 @@ git log --format="%s" -1 <commit-sha>
 - AI tool not configured to add trailers — check tool settings
 - Detection patterns in `config.yaml` don't match your tool's output — update patterns
 
-### GitHub Actions workflow fails
+### GitHub Actions collect-metrics job fails
 
-**Symptom:** "Download collector script" step fails.
+**Symptom:** The `collect-metrics` job fails in the pipeline.
 
 **Fix:**
 1. Verify the `ai-code-metrics` repo is public and accessible.
-2. Check the download URL in the workflow — org name and branch (`ref=dev`) must be correct.
-3. If using a private fork, add an access token to the `curl` command as a GitHub secret.
+2. Check the `uses:` line — `sarasanalytics-com/ai-code-metrics/.github/workflows/collect-metrics.yml@dev` must be reachable.
+3. Check the `if:` condition matches the correct branch ref (e.g., `refs/heads/dev`).
+4. If the "Download collector script" step fails, the raw GitHub URL may be temporarily unavailable — re-run the job.
 
 ### Database connection errors *(Phase 2)*
 
@@ -670,7 +674,7 @@ git log --format="%s" -1 <commit-sha>
 
 ### Adding a New Repository
 
-1. Copy `ci/ai-metrics.yml` to the repo's `.github/workflows/`.
+1. Add the `collect-metrics` job to the repo's `main.yml` (see Section 5.1).
 2. Have developers on that repo run `dev_setup.sh`.
 3. *(Phase 2)* Clone the repo on the collection server, add to `config.yaml`.
 
@@ -710,7 +714,7 @@ If an AI tool changes its trailer format:
 | `setup/schema.sql` | Database schema (3 tables + indexes) |
 | `setup/dev_setup.sh` | Developer setup script (macOS/Linux/WSL) |
 | `setup/dev_setup.ps1` | Developer setup script (Windows PowerShell) |
-| `ci/ai-metrics.yml` | GitHub Actions workflow (copy to each repo) |
+| `.github/workflows/collect-metrics.yml` | Reusable workflow (called by other repos) |
 | `ci/collect_on_merge.py` | CI-level commit classifier |
 | `collector/metrics_aggregator.py` | Daily metrics aggregation |
 | `collector/halflife_runner.py` | Weekly code survival analysis |
