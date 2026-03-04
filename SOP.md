@@ -1,7 +1,7 @@
 # Standard Operating Procedure: AI Code Metrics — Organization-Wide Deployment
 
-**Version:** 1.2
-**Last Updated:** 2026-03-04
+**Version:** 1.3
+**Last Updated:** 2026-03-05
 **Audience:** Engineering Managers, DevOps, Platform Teams, Individual Developers
 
 ---
@@ -100,48 +100,112 @@ COLLECTION SERVER                     ┌─────────────
 ## 4. Developer System Setup
 
 **Owner:** Each individual developer
-**Time:** 5 minutes
+**Time:** 5–10 minutes
+**Repository:** https://github.com/sarasanalytics-com/ai-code-metrics
 
 ### 4.1 What This Does
 
 Installing `git-ai` hooks on your machine enables **automatic, line-level attribution** of AI-assisted code. Every commit you make will be silently annotated with which AI tool (if any) helped write the code. No manual action is needed after setup.
 
-### 4.2 macOS / Linux / WSL
+### 4.2 Step 1 — Install git-ai
+
+`git-ai` is an open-source CLI tool that tracks AI code contributions. Install it first, then set up hooks on your repos.
+
+**macOS / Linux / WSL:**
 
 ```bash
-# Option A: Interactive (auto-discovers repos)
-./setup/dev_setup.sh
-
-# Option B: Explicit repos
-./setup/dev_setup.sh /path/to/repo1 /path/to/repo2 /path/to/repo3
+curl -sSL https://usegitai.com/install.sh | bash
 ```
 
-**What happens:**
-1. Checks if `git-ai` CLI is installed; installs it if missing.
-2. Runs `git-ai install` in each repo to set up post-commit hooks.
-3. Prints a summary of installed repos.
-
-### 4.3 Windows (PowerShell)
+**Windows (PowerShell — run as Administrator):**
 
 ```powershell
-# Option A: Interactive
-.\setup\dev_setup.ps1
-
-# Option B: Explicit repos
-.\setup\dev_setup.ps1 "C:\Users\you\Work\repo1" "C:\Users\you\Work\repo2"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm http://usegitai.com/install.ps1 | iex"
 ```
 
-**Note:** Windows GitBash is **not supported** — use WSL2 or PowerShell.
+After installation, **close and reopen your terminal** so the `git-ai` command is available in your PATH.
 
-### 4.4 Verify Installation
-
-In any repo where git-ai was installed:
+**Verify it installed correctly:**
 
 ```bash
+git-ai --version
+```
+
+You should see a version number (e.g., `v0.5.0`). If you get `command not found`, see [Troubleshooting — git-ai installation fails](#git-ai-installation-fails).
+
+### 4.3 Step 2 — Install hooks on your repos
+
+Once `git-ai` is installed, you need to activate it in each repo you work on. There are two ways to do this:
+
+#### Option A — Use the setup script (Recommended)
+
+The setup script automates hook installation across multiple repos at once. First, clone the ai-code-metrics repo (or pull latest if you already have it):
+
+```bash
+git clone https://github.com/sarasanalytics-com/ai-code-metrics.git
+cd ai-code-metrics
+```
+
+Then run the script with the **full paths** to each repo you work on:
+
+**macOS / Linux / WSL:**
+
+```bash
+./setup/dev_setup.sh ~/Work/iq-webapp ~/Work/webapp ~/Work/insights-webapp
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\setup\dev_setup.ps1 "C:\Users\you\Work\iq-webapp" "C:\Users\you\Work\webapp"
+```
+
+> **Note:** Replace the paths above with the actual paths to your repos on your machine. You can pass as many repo paths as you need.
+
+**What the script does:**
+1. Checks if `git-ai` is installed (installs it if missing).
+2. Runs `git-ai install` in each repo to set up the post-commit hook.
+3. Prints a summary showing which repos were set up successfully.
+
+> **Windows users:** GitBash is **not supported** — use WSL2 or PowerShell.
+
+#### Option B — Manual setup (per repo)
+
+If you prefer not to use the script, you can set up each repo manually:
+
+```bash
+cd ~/Work/iq-webapp      # navigate to your repo
+git-ai install            # installs the post-commit hook
+```
+
+Repeat for each repo you work on:
+
+```bash
+cd ~/Work/webapp && git-ai install
+cd ~/Work/insights-webapp && git-ai install
+cd ~/Work/global-accounts-webapp && git-ai install
+# ... repeat for all your repos
+```
+
+### 4.4 Step 3 — Verify Installation
+
+Run this in **each repo** where you installed git-ai:
+
+```bash
+cd ~/Work/iq-webapp
 git-ai status
 ```
 
-Expected output confirms git-ai is active with hooks installed.
+Expected output confirms git-ai is active with hooks installed. If it says hooks are not installed, re-run `git-ai install` in that repo.
+
+**Quick verification across all repos:**
+
+```bash
+for repo in ~/Work/iq-webapp ~/Work/webapp ~/Work/insights-webapp; do
+  echo "--- $repo ---"
+  cd "$repo" && git-ai status
+done
+```
 
 ### 4.5 What Changes for Developers?
 
@@ -156,11 +220,15 @@ Expected output confirms git-ai is active with hooks installed.
 
 Add this to your team's onboarding checklist:
 
-> **AI Code Metrics Setup (5 min)**
-> Run the developer setup script to enable AI code attribution:
-> - macOS/Linux: `./setup/dev_setup.sh /path/to/your-repos`
-> - Windows: `.\setup\dev_setup.ps1 "C:\path\to\your-repos"`
-> Verify with `git-ai status` in any repo.
+> **AI Code Metrics Setup (5–10 min)**
+>
+> 1. Install git-ai: `curl -sSL https://usegitai.com/install.sh | bash`
+> 2. Close and reopen your terminal
+> 3. Verify: `git-ai --version`
+> 4. For each repo you work on, run: `cd /path/to/repo && git-ai install`
+> 5. Verify in each repo: `git-ai status`
+>
+> Full instructions: https://github.com/sarasanalytics-com/ai-code-metrics/blob/dev/SOP.md#4-developer-system-setup
 
 ---
 
@@ -730,8 +798,10 @@ If an AI tool changes its trailer format:
 
 ```bash
 # === PHASE 1: DEVELOPER SETUP ===
-./setup/dev_setup.sh /path/to/repo          # Install git-ai hooks (macOS/Linux)
-git-ai status                               # Verify git-ai is active in a repo
+curl -sSL https://usegitai.com/install.sh | bash  # Step 1: Install git-ai
+git-ai --version                                   # Verify git-ai installed
+cd /path/to/repo && git-ai install                 # Step 2: Install hooks (per repo)
+git-ai status                                      # Step 3: Verify hooks are active
 
 # === PHASE 2: COLLECTION (WIP) ===
 psql -h <host> -U metrics -d ai_code_metrics -f setup/schema.sql   # Apply schema
