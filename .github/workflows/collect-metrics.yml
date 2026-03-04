@@ -1,0 +1,68 @@
+# Reusable workflow for AI Code Metrics collection.
+#
+# Call from any repo's workflow:
+#
+#   collect-metrics:
+#     if: github.ref == 'refs/heads/dev'
+#     uses: sarasanalytics-com/ai-code-metrics/.github/workflows/collect-metrics.yml@dev
+#     with:
+#       base_sha: ${{ github.event.before }}
+#       head_sha: ${{ github.sha }}
+
+name: AI Code Metrics
+
+on:
+  workflow_call:
+    inputs:
+      base_sha:
+        description: "Base commit SHA (before merge)"
+        required: true
+        type: string
+      head_sha:
+        description: "Head commit SHA (after merge)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  collect-metrics:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch git-ai notes
+        run: git fetch origin refs/notes/ai:refs/notes/ai 2>/dev/null || true
+
+      - name: Install git-ai
+        run: curl -sSL https://usegitai.com/install.sh | bash 2>/dev/null || true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download collector script
+        run: |
+          curl -sfL \
+            -o collect_on_merge.py \
+            "https://raw.githubusercontent.com/sarasanalytics-com/ai-code-metrics/dev/ci/collect_on_merge.py"
+
+      - name: Collect metrics
+        id: metrics
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          OUTPUT_FILE: metrics_output.json
+        run: python collect_on_merge.py
+
+      - name: Upload metrics artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-metrics-${{ inputs.head_sha }}
+          path: metrics_output.json
+          retention-days: 90
