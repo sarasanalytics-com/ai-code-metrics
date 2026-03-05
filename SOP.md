@@ -235,65 +235,123 @@ Add this to your team's onboarding checklist:
 ## 5. GitHub-Level Setup
 
 **Owner:** Repo Owner / Tech Lead (per repository)
-**Time:** 5 minutes per repo
+**Time:** 5–10 minutes per repo
+**What you need:** Write access to the repo's `.github/workflows/main.yml` file on GitHub
 
-### 5.1 Add the Reusable Workflow Call
+### 5.1 What This Does
 
-This project provides a **reusable workflow** at `.github/workflows/collect-metrics.yml`. Instead of copying a standalone workflow file into each repo, you add a single job to the repo's existing pipeline (e.g., `main.yml`).
+Every time code is merged into your integration branch (e.g., `dev`), a GitHub Actions job automatically:
 
-Open the repo's `.github/workflows/main.yml` and add the `collect-metrics` job:
+1. Looks at the new commits in that merge.
+2. Classifies each commit as AI-assisted or human-written (using git-ai notes, Co-Authored-By trailers, and commit message patterns).
+3. Generates a JSON summary of the AI vs human breakdown.
+4. Uploads that summary as a downloadable artifact on the workflow run.
+
+You don't need to install anything on GitHub or add secrets. The logic lives in a **reusable workflow** hosted in the public `ai-code-metrics` repo — you just add a few lines to your repo's existing workflow file to call it.
+
+### 5.2 Step 1 — Open your repo's workflow file
+
+Every repo has a GitHub Actions workflow file at `.github/workflows/main.yml` (or similar name like `ci.yml`). This is the file that runs your build/deploy pipeline.
+
+**How to find it:**
+
+1. Go to your repo on GitHub (e.g., `https://github.com/sarasanalytics-com/iq-webapp`).
+2. Click the `.github` folder → `workflows` folder.
+3. Open `main.yml` (or whatever your pipeline file is called).
+4. Click the **pencil icon** (Edit) in the top-right to edit the file, or clone the repo and edit locally.
+
+### 5.3 Step 2 — Add the collect-metrics job
+
+Scroll to the `jobs:` section of the file. You'll see your existing jobs like `build`, `deploy`, `Daton`, etc. Add the `collect-metrics` job **at the end**, after all existing jobs:
 
 ```yaml
 jobs:
-  # ... your existing jobs (e.g., Daton, build, deploy) ...
+  # ──────────────────────────────────────────────
+  # Your existing jobs stay exactly as they are.
+  # Don't change anything above this line.
+  # ──────────────────────────────────────────────
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # ... your existing build steps ...
 
+  deploy:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      # ... your existing deploy steps ...
+
+  # ──────────────────────────────────────────────
+  # ADD THIS JOB (copy-paste the lines below)
+  # ──────────────────────────────────────────────
   collect-metrics:
-    if: github.ref == 'refs/heads/dev'    # Change to your integration branch
+    if: github.ref == 'refs/heads/dev'
     uses: sarasanalytics-com/ai-code-metrics/.github/workflows/collect-metrics.yml@dev
     with:
       base_sha: ${{ github.event.before }}
       head_sha: ${{ github.sha }}
 ```
 
-**That's it.** No separate workflow file needed. No GitHub secrets required (the `ai-code-metrics` repo is public).
+**Important notes:**
+- **Indentation matters** in YAML. The `collect-metrics:` line must be indented at the same level as your other jobs (typically 2 spaces under `jobs:`).
+- The `if: github.ref == 'refs/heads/dev'` line means metrics are only collected when code is merged into the `dev` branch. If your repo uses a different integration branch (e.g., `main`), change `dev` to that branch name.
+- Do **not** remove or modify any of your existing jobs — just add this new one alongside them.
+- No GitHub secrets are needed — the `ai-code-metrics` repo is public.
 
-### 5.2 How It Works
+### 5.4 Step 3 — Commit the change
 
-- The `collect-metrics` job calls the reusable workflow hosted in the `ai-code-metrics` repo.
-- The reusable workflow checks out the repo, installs git-ai, downloads the collector script, classifies commits, and uploads the metrics as an artifact.
-- It runs as part of your existing pipeline — **one workflow entry** in the Actions tab, not two.
+**If editing on GitHub (web UI):**
 
-### 5.3 Configure the Trigger Branch
+1. After adding the job, scroll down to the "Commit changes" section.
+2. Enter a commit message: `Add AI Code Metrics collection to pipeline`
+3. Select "Commit directly to the `dev` branch" (or create a PR if your team requires reviews).
+4. Click **Commit changes**.
 
-The `if:` condition controls which branch triggers metrics collection. Adjust it to match your integration branch:
+**If editing locally (command line):**
+
+```bash
+git checkout dev
+git pull origin dev
+# Edit .github/workflows/main.yml — add the collect-metrics job
+git add .github/workflows/main.yml
+git commit -m "Add AI Code Metrics collection to pipeline"
+git push origin dev
+```
+
+### 5.5 Step 4 — Verify it works
+
+1. Create a feature branch from `dev`, make a small commit, and open a PR back to `dev`.
+2. Merge the PR.
+3. Go to the repo's **Actions** tab on GitHub (`https://github.com/sarasanalytics-com/<repo-name>/actions`).
+4. Click on the latest workflow run for the `dev` branch.
+5. You should see a **collect-metrics** job in the list of jobs. Click on it to view the logs.
+6. In the workflow run's **Artifacts** section (at the bottom of the run page), you should see an artifact named `ai-metrics-<sha>`. You can download it to see the JSON breakdown.
+
+**If the collect-metrics job doesn't appear:**
+- Make sure the merge was to the correct branch (the one in your `if:` condition).
+- Check that the YAML indentation is correct — misaligned YAML will silently skip the job.
+- See [Troubleshooting — GitHub Actions collect-metrics job fails](#github-actions-collect-metrics-job-fails).
+
+### 5.6 Understanding the trigger branch
+
+The `if:` condition controls **when** metrics collection runs:
 
 ```yaml
   collect-metrics:
-    if: github.ref == 'refs/heads/dev'       # or 'refs/heads/main', etc.
+    if: github.ref == 'refs/heads/dev'       # ← change 'dev' to your branch
 ```
 
-**Rationale:** Code should be counted once — when it merges into the integration branch. Do not trigger on promotion branches (staging, production) to avoid double-counting.
+| If your integration branch is... | Set the condition to... |
+|----------------------------------|------------------------|
+| `dev` | `github.ref == 'refs/heads/dev'` |
+| `main` | `github.ref == 'refs/heads/main'` |
+| `develop` | `github.ref == 'refs/heads/develop'` |
 
-### 5.4 Commit and Push
+**Why only one branch?** Code should be counted once — when it merges into the integration branch. If you also trigger on `staging` or `production`, the same commits would be counted multiple times.
 
-```bash
-git add .github/workflows/main.yml
-git commit -m "Add AI Code Metrics collection to pipeline"
-git push origin main
-```
+### 5.7 Adding custom logic per repo (Optional / Advanced)
 
-### 5.5 Verify
-
-1. Create a branch, make some commits, merge to your trigger branch (e.g., `dev`).
-2. Go to the repo's **Actions** tab on GitHub.
-3. Confirm the pipeline ran with the `collect-metrics` job visible.
-4. Check the workflow run for:
-   - A job summary with the AI contribution breakdown.
-   - An uploaded artifact named `ai-metrics-<sha>`.
-
-### 5.6 Adding Custom Logic Per Repo
-
-Since the reusable workflow is a job in your `main.yml`, you can add repo-specific logic around it:
+Since the reusable workflow is just another job in your `main.yml`, you can customize the flow. For example, you can make it wait for your build to pass first, or add a notification step after metrics are collected:
 
 ```yaml
   collect-metrics:
@@ -310,6 +368,8 @@ Since the reusable workflow is a job in your `main.yml`, you can add repo-specif
     steps:
       - run: echo "Metrics collected successfully"
 ```
+
+This is entirely optional — the basic setup from Step 2 is all you need.
 
 ---
 
