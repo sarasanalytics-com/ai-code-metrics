@@ -1,7 +1,7 @@
 # Standard Operating Procedure: AI Code Metrics — Organization-Wide Deployment
 
-**Version:** 1.2
-**Last Updated:** 2026-03-04
+**Version:** 1.3
+**Last Updated:** 2026-03-05
 **Audience:** Engineering Managers, DevOps, Platform Teams, Individual Developers
 
 ---
@@ -100,48 +100,112 @@ COLLECTION SERVER                     ┌─────────────
 ## 4. Developer System Setup
 
 **Owner:** Each individual developer
-**Time:** 5 minutes
+**Time:** 5–10 minutes
+**Repository:** https://github.com/sarasanalytics-com/ai-code-metrics
 
 ### 4.1 What This Does
 
 Installing `git-ai` hooks on your machine enables **automatic, line-level attribution** of AI-assisted code. Every commit you make will be silently annotated with which AI tool (if any) helped write the code. No manual action is needed after setup.
 
-### 4.2 macOS / Linux / WSL
+### 4.2 Step 1 — Install git-ai
+
+`git-ai` is an open-source CLI tool that tracks AI code contributions. Install it first, then set up hooks on your repos.
+
+**macOS / Linux / WSL:**
 
 ```bash
-# Option A: Interactive (auto-discovers repos)
-./setup/dev_setup.sh
-
-# Option B: Explicit repos
-./setup/dev_setup.sh /path/to/repo1 /path/to/repo2 /path/to/repo3
+curl -sSL https://usegitai.com/install.sh | bash
 ```
 
-**What happens:**
-1. Checks if `git-ai` CLI is installed; installs it if missing.
-2. Runs `git-ai install` in each repo to set up post-commit hooks.
-3. Prints a summary of installed repos.
-
-### 4.3 Windows (PowerShell)
+**Windows (PowerShell — run as Administrator):**
 
 ```powershell
-# Option A: Interactive
-.\setup\dev_setup.ps1
-
-# Option B: Explicit repos
-.\setup\dev_setup.ps1 "C:\Users\you\Work\repo1" "C:\Users\you\Work\repo2"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm http://usegitai.com/install.ps1 | iex"
 ```
 
-**Note:** Windows GitBash is **not supported** — use WSL2 or PowerShell.
+After installation, **close and reopen your terminal** so the `git-ai` command is available in your PATH.
 
-### 4.4 Verify Installation
-
-In any repo where git-ai was installed:
+**Verify it installed correctly:**
 
 ```bash
+git-ai --version
+```
+
+You should see a version number (e.g., `v0.5.0`). If you get `command not found`, see [Troubleshooting — git-ai installation fails](#git-ai-installation-fails).
+
+### 4.3 Step 2 — Install hooks on your repos
+
+Once `git-ai` is installed, you need to activate it in each repo you work on. There are two ways to do this:
+
+#### Option A — Use the setup script (Recommended)
+
+The setup script automates hook installation across multiple repos at once. First, clone the ai-code-metrics repo (or pull latest if you already have it):
+
+```bash
+git clone https://github.com/sarasanalytics-com/ai-code-metrics.git
+cd ai-code-metrics
+```
+
+Then run the script with the **full paths** to each repo you work on:
+
+**macOS / Linux / WSL:**
+
+```bash
+./setup/dev_setup.sh ~/Work/iq-webapp ~/Work/webapp ~/Work/insights-webapp
+```
+
+**Windows (PowerShell):**
+
+```powershell
+.\setup\dev_setup.ps1 "C:\Users\you\Work\iq-webapp" "C:\Users\you\Work\webapp"
+```
+
+> **Note:** Replace the paths above with the actual paths to your repos on your machine. You can pass as many repo paths as you need.
+
+**What the script does:**
+1. Checks if `git-ai` is installed (installs it if missing).
+2. Runs `git-ai install` in each repo to set up the post-commit hook.
+3. Prints a summary showing which repos were set up successfully.
+
+> **Windows users:** GitBash is **not supported** — use WSL2 or PowerShell.
+
+#### Option B — Manual setup (per repo)
+
+If you prefer not to use the script, you can set up each repo manually:
+
+```bash
+cd ~/Work/iq-webapp      # navigate to your repo
+git-ai install            # installs the post-commit hook
+```
+
+Repeat for each repo you work on:
+
+```bash
+cd ~/Work/webapp && git-ai install
+cd ~/Work/insights-webapp && git-ai install
+cd ~/Work/global-accounts-webapp && git-ai install
+# ... repeat for all your repos
+```
+
+### 4.4 Step 3 — Verify Installation
+
+Run this in **each repo** where you installed git-ai:
+
+```bash
+cd ~/Work/iq-webapp
 git-ai status
 ```
 
-Expected output confirms git-ai is active with hooks installed.
+Expected output confirms git-ai is active with hooks installed. If it says hooks are not installed, re-run `git-ai install` in that repo.
+
+**Quick verification across all repos:**
+
+```bash
+for repo in ~/Work/iq-webapp ~/Work/webapp ~/Work/insights-webapp; do
+  echo "--- $repo ---"
+  cd "$repo" && git-ai status
+done
+```
 
 ### 4.5 What Changes for Developers?
 
@@ -156,76 +220,138 @@ Expected output confirms git-ai is active with hooks installed.
 
 Add this to your team's onboarding checklist:
 
-> **AI Code Metrics Setup (5 min)**
-> Run the developer setup script to enable AI code attribution:
-> - macOS/Linux: `./setup/dev_setup.sh /path/to/your-repos`
-> - Windows: `.\setup\dev_setup.ps1 "C:\path\to\your-repos"`
-> Verify with `git-ai status` in any repo.
+> **AI Code Metrics Setup (5–10 min)**
+>
+> 1. Install git-ai: `curl -sSL https://usegitai.com/install.sh | bash`
+> 2. Close and reopen your terminal
+> 3. Verify: `git-ai --version`
+> 4. For each repo you work on, run: `cd /path/to/repo && git-ai install`
+> 5. Verify in each repo: `git-ai status`
+>
+> Full instructions: https://github.com/sarasanalytics-com/ai-code-metrics/blob/dev/SOP.md#4-developer-system-setup
 
 ---
 
 ## 5. GitHub-Level Setup
 
 **Owner:** Repo Owner / Tech Lead (per repository)
-**Time:** 5 minutes per repo
+**Time:** 5–10 minutes per repo
+**What you need:** Write access to the repo's `.github/workflows/main.yml` file on GitHub
 
-### 5.1 Add the Reusable Workflow Call
+### 5.1 What This Does
 
-This project provides a **reusable workflow** at `.github/workflows/collect-metrics.yml`. Instead of copying a standalone workflow file into each repo, you add a single job to the repo's existing pipeline (e.g., `main.yml`).
+Every time code is merged into your integration branch (e.g., `dev`), a GitHub Actions job automatically:
 
-Open the repo's `.github/workflows/main.yml` and add the `collect-metrics` job:
+1. Looks at the new commits in that merge.
+2. Classifies each commit as AI-assisted or human-written (using git-ai notes, Co-Authored-By trailers, and commit message patterns).
+3. Generates a JSON summary of the AI vs human breakdown.
+4. Uploads that summary as a downloadable artifact on the workflow run.
+
+You don't need to install anything on GitHub or add secrets. The logic lives in a **reusable workflow** hosted in the public `ai-code-metrics` repo — you just add a few lines to your repo's existing workflow file to call it.
+
+### 5.2 Step 1 — Open your repo's workflow file
+
+Every repo has a GitHub Actions workflow file at `.github/workflows/main.yml` (or similar name like `ci.yml`). This is the file that runs your build/deploy pipeline.
+
+**How to find it:**
+
+1. Go to your repo on GitHub (e.g., `https://github.com/sarasanalytics-com/iq-webapp`).
+2. Click the `.github` folder → `workflows` folder.
+3. Open `main.yml` (or whatever your pipeline file is called).
+4. Click the **pencil icon** (Edit) in the top-right to edit the file, or clone the repo and edit locally.
+
+### 5.3 Step 2 — Add the collect-metrics job
+
+Scroll to the `jobs:` section of the file. You'll see your existing jobs like `build`, `deploy`, `Daton`, etc. Add the `collect-metrics` job **at the end**, after all existing jobs:
 
 ```yaml
 jobs:
-  # ... your existing jobs (e.g., Daton, build, deploy) ...
+  # ──────────────────────────────────────────────
+  # Your existing jobs stay exactly as they are.
+  # Don't change anything above this line.
+  # ──────────────────────────────────────────────
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # ... your existing build steps ...
 
+  deploy:
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      # ... your existing deploy steps ...
+
+  # ──────────────────────────────────────────────
+  # ADD THIS JOB (copy-paste the lines below)
+  # ──────────────────────────────────────────────
   collect-metrics:
-    if: github.ref == 'refs/heads/dev'    # Change to your integration branch
+    if: github.ref == 'refs/heads/dev'
     uses: sarasanalytics-com/ai-code-metrics/.github/workflows/collect-metrics.yml@dev
     with:
       base_sha: ${{ github.event.before }}
       head_sha: ${{ github.sha }}
 ```
 
-**That's it.** No separate workflow file needed. No GitHub secrets required (the `ai-code-metrics` repo is public).
+**Important notes:**
+- **Indentation matters** in YAML. The `collect-metrics:` line must be indented at the same level as your other jobs (typically 2 spaces under `jobs:`).
+- The `if: github.ref == 'refs/heads/dev'` line means metrics are only collected when code is merged into the `dev` branch. If your repo uses a different integration branch (e.g., `main`), change `dev` to that branch name.
+- Do **not** remove or modify any of your existing jobs — just add this new one alongside them.
+- No GitHub secrets are needed — the `ai-code-metrics` repo is public.
 
-### 5.2 How It Works
+### 5.4 Step 3 — Commit the change
 
-- The `collect-metrics` job calls the reusable workflow hosted in the `ai-code-metrics` repo.
-- The reusable workflow checks out the repo, installs git-ai, downloads the collector script, classifies commits, and uploads the metrics as an artifact.
-- It runs as part of your existing pipeline — **one workflow entry** in the Actions tab, not two.
+**If editing on GitHub (web UI):**
 
-### 5.3 Configure the Trigger Branch
+1. After adding the job, scroll down to the "Commit changes" section.
+2. Enter a commit message: `Add AI Code Metrics collection to pipeline`
+3. Select "Commit directly to the `dev` branch" (or create a PR if your team requires reviews).
+4. Click **Commit changes**.
 
-The `if:` condition controls which branch triggers metrics collection. Adjust it to match your integration branch:
+**If editing locally (command line):**
+
+```bash
+git checkout dev
+git pull origin dev
+# Edit .github/workflows/main.yml — add the collect-metrics job
+git add .github/workflows/main.yml
+git commit -m "Add AI Code Metrics collection to pipeline"
+git push origin dev
+```
+
+### 5.5 Step 4 — Verify it works
+
+1. Create a feature branch from `dev`, make a small commit, and open a PR back to `dev`.
+2. Merge the PR.
+3. Go to the repo's **Actions** tab on GitHub (`https://github.com/sarasanalytics-com/<repo-name>/actions`).
+4. Click on the latest workflow run for the `dev` branch.
+5. You should see a **collect-metrics** job in the list of jobs. Click on it to view the logs.
+6. In the workflow run's **Artifacts** section (at the bottom of the run page), you should see an artifact named `ai-metrics-<sha>`. You can download it to see the JSON breakdown.
+
+**If the collect-metrics job doesn't appear:**
+- Make sure the merge was to the correct branch (the one in your `if:` condition).
+- Check that the YAML indentation is correct — misaligned YAML will silently skip the job.
+- See [Troubleshooting — GitHub Actions collect-metrics job fails](#github-actions-collect-metrics-job-fails).
+
+### 5.6 Understanding the trigger branch
+
+The `if:` condition controls **when** metrics collection runs:
 
 ```yaml
   collect-metrics:
-    if: github.ref == 'refs/heads/dev'       # or 'refs/heads/main', etc.
+    if: github.ref == 'refs/heads/dev'       # ← change 'dev' to your branch
 ```
 
-**Rationale:** Code should be counted once — when it merges into the integration branch. Do not trigger on promotion branches (staging, production) to avoid double-counting.
+| If your integration branch is... | Set the condition to... |
+|----------------------------------|------------------------|
+| `dev` | `github.ref == 'refs/heads/dev'` |
+| `main` | `github.ref == 'refs/heads/main'` |
+| `develop` | `github.ref == 'refs/heads/develop'` |
 
-### 5.4 Commit and Push
+**Why only one branch?** Code should be counted once — when it merges into the integration branch. If you also trigger on `staging` or `production`, the same commits would be counted multiple times.
 
-```bash
-git add .github/workflows/main.yml
-git commit -m "Add AI Code Metrics collection to pipeline"
-git push origin main
-```
+### 5.7 Adding custom logic per repo (Optional / Advanced)
 
-### 5.5 Verify
-
-1. Create a branch, make some commits, merge to your trigger branch (e.g., `dev`).
-2. Go to the repo's **Actions** tab on GitHub.
-3. Confirm the pipeline ran with the `collect-metrics` job visible.
-4. Check the workflow run for:
-   - A job summary with the AI contribution breakdown.
-   - An uploaded artifact named `ai-metrics-<sha>`.
-
-### 5.6 Adding Custom Logic Per Repo
-
-Since the reusable workflow is a job in your `main.yml`, you can add repo-specific logic around it:
+Since the reusable workflow is just another job in your `main.yml`, you can customize the flow. For example, you can make it wait for your build to pass first, or add a notification step after metrics are collected:
 
 ```yaml
   collect-metrics:
@@ -242,6 +368,8 @@ Since the reusable workflow is a job in your `main.yml`, you can add repo-specif
     steps:
       - run: echo "Metrics collected successfully"
 ```
+
+This is entirely optional — the basic setup from Step 2 is all you need.
 
 ---
 
@@ -730,8 +858,10 @@ If an AI tool changes its trailer format:
 
 ```bash
 # === PHASE 1: DEVELOPER SETUP ===
-./setup/dev_setup.sh /path/to/repo          # Install git-ai hooks (macOS/Linux)
-git-ai status                               # Verify git-ai is active in a repo
+curl -sSL https://usegitai.com/install.sh | bash  # Step 1: Install git-ai
+git-ai --version                                   # Verify git-ai installed
+cd /path/to/repo && git-ai install                 # Step 2: Install hooks (per repo)
+git-ai status                                      # Step 3: Verify hooks are active
 
 # === PHASE 2: COLLECTION (WIP) ===
 psql -h <host> -U metrics -d ai_code_metrics -f setup/schema.sql   # Apply schema
