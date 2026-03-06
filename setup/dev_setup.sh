@@ -149,6 +149,8 @@ for repo in "${TARGET_REPOS[@]}"; do
     repo_name=$(basename "$repo")
     echo -n "Installing git-ai on $repo_name... "
     if (cd "$repo" && git-ai install 2>/dev/null); then
+        # Configure git to push ai notes alongside code so CI can read them
+        (cd "$repo" && git config remote.origin.push "+refs/notes/ai:refs/notes/ai")
         info "done"
         ((INSTALLED++))
     else

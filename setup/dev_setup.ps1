@@ -127,6 +127,8 @@ foreach ($repo in $TargetRepos) {
         Push-Location $repo
         & git-ai install 2>$null
         if ($LASTEXITCODE -eq 0) {
+            # Configure git to push ai notes alongside code so CI can read them
+            & git config remote.origin.push "+refs/notes/ai:refs/notes/ai"
             Write-OK "done"
             $Installed++
         } else {
