@@ -1,12 +1,16 @@
 # =============================================================
 # AI Code Metrics - Developer Setup (Windows PowerShell)
 # =============================================================
-# Run this script once to install git-ai hooks on your repos.
+# Run this script once to install git-ai on your machine.
 # It enables line-level tracking of AI vs Human code contributions.
 #
+# As of git-ai v0.5+, NO per-repo hook installation is needed.
+# git-ai uses a git wrapper + daemon that tracks attribution
+# automatically across all repos.
+#
 # Usage:
-#   .\dev_setup.ps1                              # interactive - finds repos automatically
-#   .\dev_setup.ps1 C:\Users\you\Work\repo1      # explicit repo paths
+#   .\dev_setup.ps1                              # install + verify
+#   .\dev_setup.ps1 C:\Users\you\Work\repo1      # also clean legacy hooks
 #
 # Prerequisites:
 #   - git
@@ -14,11 +18,6 @@
 # =============================================================
 
 $ErrorActionPreference = "Stop"
-
-$Repos = @(
-    "iq-webapp"
-    # Add more repo names here as needed
-)
 
 function Write-OK($msg)    { Write-Host "[OK] $msg" -ForegroundColor Green }
 function Write-Warn($msg)  { Write-Host "[WARN] $msg" -ForegroundColor Yellow }
@@ -48,96 +47,116 @@ if ($gitAiCmd) {
         } else {
             Write-Err "git-ai installation failed. Please install manually:"
             Write-Host '  powershell -NoProfile -ExecutionPolicy Bypass -Command "irm http://usegitai.com/install.ps1 | iex"'
-            Write-Host "  See: https://github.com/lgtm-ai/git-ai"
+            Write-Host "  See: https://github.com/git-ai-project/git-ai"
             exit 1
         }
     } catch {
         Write-Err "git-ai installation failed: $_"
         Write-Host '  powershell -NoProfile -ExecutionPolicy Bypass -Command "irm http://usegitai.com/install.ps1 | iex"'
-        Write-Host "  See: https://github.com/lgtm-ai/git-ai"
+        Write-Host "  See: https://github.com/git-ai-project/git-ai"
         exit 1
     }
 }
 
-# --- Step 2: Find repos to set up ---
-$TargetRepos = @()
+# --- Step 2: Verify git-ai is working ---
+Write-Host ""
+Write-Host "Verifying git-ai setup..."
 
-if ($args.Count -gt 0) {
-    # Repos passed as arguments
-    foreach ($repo in $args) {
-        if (Test-Path (Join-Path $repo ".git")) {
-            $TargetRepos += $repo
-        } else {
-            Write-Warn "Skipping $repo (not a git repo)"
-        }
+try {
+    & git-ai status 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-OK "git-ai is active and tracking"
+    } else {
+        Write-Warn "git-ai status check returned an error. This may be normal if not inside a git repo."
+        Write-Host "  Try running 'git-ai status' inside one of your repos to verify."
     }
-} else {
-    # Auto-detect: look for known repos in common locations
-    $SearchDirs = @(
-        (Join-Path $HOME "Work"),
-        (Join-Path $HOME "work"),
-        (Join-Path $HOME "projects"),
-        (Join-Path $HOME "code"),
-        (Join-Path $HOME "src"),
-        (Split-Path (Get-Location) -Parent)
-    )
+} catch {
+    Write-Warn "Could not run git-ai status. Try running it manually inside a git repo."
+}
 
-    Write-Host "Searching for repos: $($Repos -join ', ')"
+# --- Step 3: Clean up legacy hooks (if repos provided) ---
+if ($args.Count -gt 0) {
+    Write-Host ""
+    Write-Host "Cleaning up legacy git-ai hooks from specified repos..."
+    Write-Host "(git-ai no longer uses per-repo hooks - the wrapper handles everything)"
     Write-Host ""
 
-    foreach ($dir in $SearchDirs) {
-        if (-not (Test-Path $dir)) { continue }
-        foreach ($repoName in $Repos) {
-            $repoPath = Join-Path $dir $repoName
-            if (Test-Path (Join-Path $repoPath ".git")) {
-                $TargetRepos += $repoPath
+    $Cleaned = 0
+    $Skipped = 0
+
+    foreach ($repo in $args) {
+        if (-not (Test-Path (Join-Path $repo ".git"))) {
+            Write-Warn "Skipping $repo (not a git repo)"
+            $Skipped++
+            continue
+        }
+
+        $repoName = Split-Path $repo -Leaf
+        Write-Host -NoNewline "Checking $repoName for legacy hooks... "
+
+        $hookPath = Join-Path $repo ".git" "hooks" "post-commit"
+        $hasLegacyHook = $false
+        if (Test-Path $hookPath) {
+            $target = try { (Get-Item $hookPath).Target } catch { $null }
+            if ($target -and $target -match "git-ai") {
+                $hasLegacyHook = $true
             }
         }
+
+        if ($hasLegacyHook) {
+            try {
+                Push-Location $repo
+                & git-ai git-hooks remove 2>$null
+                if ($LASTEXITCODE -eq 0) {
+                    Write-OK "cleaned up legacy hooks"
+                    $Cleaned++
+                } else {
+                    Write-Warn "could not clean hooks (try manually: cd $repo; git-ai git-hooks remove)"
+                }
+            } catch {
+                Write-Warn "could not clean hooks: $_"
+            } finally {
+                Pop-Location
+            }
+        } else {
+            Write-OK "no legacy hooks found"
+        }
     }
 
-    if ($TargetRepos.Count -eq 0) {
-        Write-Warn "No repos found automatically."
+    if ($Cleaned -gt 0) {
         Write-Host ""
-        Write-Host "Please run with explicit paths:"
-        Write-Host "  .\dev_setup.ps1 C:\Users\you\Work\iq-webapp"
-        exit 1
-    }
-
-    Write-Host "Found the following repos:"
-    foreach ($repo in $TargetRepos) {
-        Write-Host "  - $repo"
-    }
-    Write-Host ""
-    $confirm = Read-Host "Install git-ai hooks on these repos? (y/n)"
-    if ($confirm -notmatch '^[Yy]$') {
-        Write-Host "Aborted."
-        exit 0
+        Write-OK "Cleaned legacy hooks from $Cleaned repo(s)"
     }
 }
 
-# --- Step 3: Install git-ai hooks ---
-Write-Host ""
-$Installed = 0
-$Failed = 0
+# --- Step 4: Configure note pushing (for repos provided) ---
+if ($args.Count -gt 0) {
+    Write-Host ""
+    Write-Host "Configuring git-ai note pushing on repos..."
+    Write-Host ""
 
-foreach ($repo in $TargetRepos) {
-    $repoName = Split-Path $repo -Leaf
-    Write-Host -NoNewline "Installing git-ai on $repoName... "
-    try {
-        Push-Location $repo
-        & git-ai install 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            Write-OK "done"
-            $Installed++
-        } else {
-            Write-Err "failed"
-            $Failed++
+    foreach ($repo in $args) {
+        if (-not (Test-Path (Join-Path $repo ".git"))) {
+            continue
         }
-    } catch {
-        Write-Err "failed"
-        $Failed++
-    } finally {
-        Pop-Location
+
+        $repoName = Split-Path $repo -Leaf
+        Write-Host -NoNewline "Configuring note push for $repoName... "
+
+        try {
+            Push-Location $repo
+            $currentPush = & git config --get-all remote.origin.push 2>$null
+            if ($currentPush -match "refs/notes/ai") {
+                Write-OK "already configured"
+            } else {
+                & git config --add remote.origin.push "+refs/notes/ai:refs/notes/ai"
+                Write-OK "done"
+            }
+        } catch {
+            Write-Warn "could not configure: $_"
+        } finally {
+            Pop-Location
+        }
     }
 }
 
@@ -146,14 +165,19 @@ Write-Host ""
 Write-Host "========================================="
 Write-Host "  Setup Complete"
 Write-Host "========================================="
-Write-Host "  Installed: $Installed repo(s)"
-if ($Failed -gt 0) {
-    Write-Host "  Failed:    $Failed repo(s)"
+Write-Host ""
+Write-Host "  git-ai is installed and active."
+Write-Host "  No per-repo setup is needed anymore."
+Write-Host "  Just commit as normal - git-ai tracks"
+Write-Host "  AI attribution automatically via its"
+Write-Host "  git wrapper."
+Write-Host ""
+Write-Host "  To verify in any repo:"
+Write-Host "    git-ai status"
+Write-Host ""
+if ($args.Count -eq 0) {
+    Write-Host "  To clean legacy hooks from repos, re-run:"
+    Write-Host '    .\dev_setup.ps1 "C:\Users\you\Work\repo1"'
+    Write-Host ""
 }
-Write-Host ""
-Write-Host "From now on, your commits will be tagged"
-Write-Host "with AI attribution data automatically."
-Write-Host ""
-Write-Host "To verify, run in any repo:"
-Write-Host "  git-ai status"
 Write-Host "========================================="

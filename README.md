@@ -12,7 +12,7 @@ Track AI vs Human code contributions across repos using open-source tools.
 ## Architecture
 
 ```
-git-ai (hooks on each repo)
+git-ai (wrapper + daemon on each dev machine)
     -> collector (daily cron)
         -> PostgreSQL (metrics DB)
             -> Grafana (dashboards)
@@ -39,23 +39,52 @@ For the full deployment guide, see [SOP.md](SOP.md).
 
 ## Developer Setup (one-time)
 
-Install git-ai hooks for line-level AI attribution:
+Install git-ai for line-level AI attribution. **No per-repo setup is needed** — git-ai v0.5+ uses a git wrapper + daemon that tracks attribution automatically across all repos.
 
 ```bash
 # macOS / Linux / WSL
-./setup/dev_setup.sh /path/to/repo1 /path/to/repo2
-
-# Windows (PowerShell)
-.\setup\dev_setup.ps1 "C:\path\to\repo1" "C:\path\to\repo2"
+curl -sSL https://usegitai.com/install.sh | bash
 ```
 
-Verify: `git-ai status`
+```powershell
+# Windows (PowerShell)
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm http://usegitai.com/install.ps1 | iex"
+```
+
+Close and reopen your terminal, then verify:
+
+```bash
+git-ai --version
+git-ai status
+```
+
+### Migrating from legacy hooks
+
+If you previously ran `git-ai install` in your repos, the old hooks are now inactive (deprecated in [git-ai PR #847](https://github.com/git-ai-project/git-ai/pull/847)). Clean them up:
+
+```bash
+# Option A: Use the setup script to clean all repos at once
+./setup/dev_setup.sh ~/Work/iq-webapp ~/Work/webapp ~/Work/insights-webapp
+
+# Option B: Manual cleanup per repo
+cd ~/Work/iq-webapp && git-ai git-hooks remove
+```
+
+### Pushing git-ai notes
+
+By default, `git push` does **not** push git-ai notes to the remote. To ensure CI can access attribution data:
+
+```bash
+git config --add remote.origin.push "+refs/notes/ai:refs/notes/ai"
+```
+
+Run this once per repo. The setup script handles this automatically when you pass repo paths.
 
 ## Prerequisites
 
 - Python 3.10+
 - PostgreSQL 14+ *(Phase 2 -- aggregation & dashboards)*
-- [git-ai](https://github.com/lgtm-ai/git-ai) installed on target repos
+- [git-ai](https://github.com/git-ai-project/git-ai) installed on dev machines
 - [git-of-theseus](https://github.com/erikbern/git-of-theseus) (`pip install git-of-theseus`) *(Phase 2)*
 - Grafana *(Phase 2)*
 
@@ -90,7 +119,7 @@ ai-code-metrics/
 
 Commits are classified using this priority order:
 
-1. **git-ai notes** (most accurate) -- line-level attribution from git-ai hooks
+1. **git-ai notes** (most accurate) -- line-level attribution from git-ai wrapper/daemon
 2. **Co-Authored-By trailer** -- `Co-Authored-By: Claude` (Claude Code), `Co-Authored-By: Junie` (IntelliJ), etc.
 3. **Commit message patterns** -- Windsurf/Cursor/Junie/Gemini identifiable patterns
 4. **Author email convention** -- Team-configured AI tool emails
