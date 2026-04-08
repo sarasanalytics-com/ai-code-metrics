@@ -92,10 +92,10 @@ Commits are classified using this priority order:
 
 1. **git-ai notes** (most accurate) -- line-level attribution from git-ai hooks
 2. **Co-Authored-By trailer** -- `Co-Authored-By: Claude` (Claude Code), `Co-Authored-By: Junie` (IntelliJ), etc.
-3. **Commit message patterns** -- Windsurf/Cursor/Junie identifiable patterns
+3. **Commit message patterns** -- Windsurf/Cursor/Junie/Gemini identifiable patterns
 4. **Author email convention** -- Team-configured AI tool emails
 
-Supported tools: **Claude, Windsurf, Cursor, Copilot, Junie** -- extensible via `config.yaml`.
+Supported tools: **Claude, Windsurf, Cursor, Copilot, Junie, Gemini** -- extensible via `config.yaml`.
 
 ## License
 
