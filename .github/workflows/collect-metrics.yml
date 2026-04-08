@@ -51,6 +51,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Install Python dependencies
+        run: pip install psycopg2-binary
+
       - name: Download collector script
         run: |
           curl -sfL \
