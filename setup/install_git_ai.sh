@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Install git-ai hooks on all repos listed in config.yaml
+# Migrate repos listed in config.yaml to git-ai async mode.
+# Cleans up legacy hooks and configures note pushing.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -8,7 +9,7 @@ CONFIG="$PROJECT_DIR/config.yaml"
 
 if ! command -v git-ai &> /dev/null; then
     echo "Error: git-ai is not installed."
-    echo "Install it from: https://github.com/lgtm-ai/git-ai"
+    echo "Install it from: https://github.com/git-ai-project/git-ai"
     exit 1
 fi
 
@@ -25,7 +26,7 @@ if [ -z "$REPOS" ]; then
     exit 1
 fi
 
-echo "Installing git-ai hooks on repos..."
+echo "Migrating repos to git-ai async mode..."
 echo ""
 
 for repo in $REPOS; do
@@ -34,8 +35,22 @@ for repo in $REPOS; do
         continue
     fi
 
-    echo "Installing git-ai on: $repo"
-    (cd "$repo" && git-ai install) && echo "  OK" || echo "  FAILED"
+    repo_name=$(basename "$repo")
+
+    # Clean up legacy hooks if present
+    if [ -f "$repo/.git/hooks/post-commit" ] && readlink "$repo/.git/hooks/post-commit" 2>/dev/null | grep -q "git-ai"; then
+        echo "Cleaning legacy hooks on: $repo_name"
+        (cd "$repo" && git-ai git-hooks remove 2>/dev/null) && echo "  Hooks removed" || echo "  FAILED to remove hooks"
+    fi
+
+    # Configure note pushing
+    CURRENT_PUSH=$(cd "$repo" && git config --get-all remote.origin.push 2>/dev/null || true)
+    if echo "$CURRENT_PUSH" | grep -q "refs/notes/ai"; then
+        echo "  Note push already configured for $repo_name"
+    else
+        (cd "$repo" && git config --add remote.origin.push "+refs/notes/ai:refs/notes/ai")
+        echo "  Note push configured for $repo_name"
+    fi
 done
 
 echo ""
