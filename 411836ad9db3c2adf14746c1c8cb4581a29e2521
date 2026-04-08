@@ -1,0 +1,27 @@
+SOP.md
+  9231181d376adf31 4
+ci/collect_on_merge.py
+  9231181d376adf31 6
+.github/workflows/collect-metrics.yml
+  9231181d376adf31 3-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "411836ad9db3c2adf14746c1c8cb4581a29e2521",
+  "prompts": {
+    "9231181d376adf31": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b49648ae-d18a-43b4-bbea-ad78e0a643d0",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Venkateshwaran Selvaraj",
+      "messages": [],
+      "total_additions": 5,
+      "total_deletions": 2,
+      "accepted_lines": 5,
+      "overriden_lines": 0
+    }
+  }
+}
