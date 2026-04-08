@@ -76,7 +76,7 @@ jobs:
         with:
           name: ai-metrics-${{ inputs.head_sha }}
           path: metrics_output.json
-          retention-days: 90
+          retention-days: 7
 
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
