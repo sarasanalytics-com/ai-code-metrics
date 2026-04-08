@@ -1,0 +1,23 @@
+setup/install_git_ai.sh
+  9231181d376adf31 2-3,12,29,38-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "a5f83191b8218625115a4a97f343d3789916f22b",
+  "prompts": {
+    "9231181d376adf31": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b49648ae-d18a-43b4-bbea-ad78e0a643d0",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "Venkateshwaran Selvaraj",
+      "messages": [],
+      "total_additions": 20,
+      "total_deletions": 5,
+      "accepted_lines": 20,
+      "overriden_lines": 0
+    }
+  }
+}
