@@ -22,9 +22,19 @@ on:
         description: "Head commit SHA (after merge)"
         required: true
         type: string
+        
 
 permissions:
   contents: read
+
+env:
+  GCP_SA_KEY: "${{ secrets.GCP_SA_KEY }}"
+  workload_identity_provider: 'projects/407696326090/locations/global/workloadIdentityPools/github-actions-pool/providers/github'
+  service_account: 'registry-pull-push@daton-210514.iam.gserviceaccount.com'
+  CLOUD_SQL_CONNECTION_NAME: "${{ secrets.CLOUD_SQL_CONNECTION_NAME }}"
+  DB_NAME: "${{ secrets.DB_NAME }}"
+  DB_USER: "${{ secrets.DB_USER }}"
+  DB_PASSWORD: "${{ secrets.DB_PASSWORD }}"
 
 jobs:
   collect-metrics:
