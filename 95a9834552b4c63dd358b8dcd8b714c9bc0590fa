@@ -1,0 +1,23 @@
+.github/workflows/collect-metrics.yml
+  33e0329332c45f8d 69-71,73-74,81,96,98-106,110-111
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.5",
+  "base_commit_sha": "95a9834552b4c63dd358b8dcd8b714c9bc0590fa",
+  "prompts": {
+    "33e0329332c45f8d": {
+      "agent_id": {
+        "tool": "github-copilot",
+        "id": "8e9d14b5-c684-4a9b-a5fa-5379cf529223",
+        "model": "unknown"
+      },
+      "human_author": "Santhosh Kumar Dowluri",
+      "messages": [],
+      "total_additions": 28,
+      "total_deletions": 0,
+      "accepted_lines": 19,
+      "overriden_lines": 9
+    }
+  }
+}
