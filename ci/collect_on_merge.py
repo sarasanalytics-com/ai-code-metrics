@@ -3,7 +3,7 @@
 Runs in GitHub Actions on merge to protected branches (dev/qa/prod).
 
 Attribution sources (in priority order):
-  1. git-ai notes  — line-level attribution from agent self-reporting
+  1. git-ai notes  — line-level attribution from git-ai daemon (async mode)
   2. Co-Authored-By trailers — tamper-resistant (baked into commit SHA)
   3. Commit message patterns — heuristic fallback
 """
