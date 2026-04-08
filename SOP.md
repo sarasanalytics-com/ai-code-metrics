@@ -1,7 +1,7 @@
 # Standard Operating Procedure: AI Code Metrics — Organization-Wide Deployment
 
 **Version:** 1.4
-**Last Updated:** 2026-04-02
+**Last Updated:** 2026-04-08
 **Audience:** Engineering Managers, DevOps, Platform Teams, Individual Developers
 
 ---

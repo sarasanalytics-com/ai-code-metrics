@@ -1,5 +1,8 @@
 # Reusable workflow for AI Code Metrics collection.
 #
+# git-ai v1.2.1+ uses async/daemon mode (no per-repo hooks).
+# This workflow installs git-ai in CI to read notes and run stats.
+#
 # Call from any repo's workflow:
 #
 #   collect-metrics:
